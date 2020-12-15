@@ -15,5 +15,6 @@ else()
 endif()
 
 find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
 add_executable(double-spring-pendulum main.cpp)
-target_link_libraries(double-spring-pendulum glfw GLU ${OPENGL_LIBRARIES})
+target_link_libraries(double-spring-pendulum glfw GLU "${GLEW_LIBRARIES}" ${OPENGL_LIBRARIES})

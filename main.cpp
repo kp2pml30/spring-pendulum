@@ -1,10 +1,13 @@
-#include <GL/glu.h>
+#include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <stdexcept>
 
 #include "pendulum.h"
+#include "shaders.h"
+#include "Shader.h"
 
 #ifndef __FAST_MATH__
 # warning fast math is not enabled
@@ -15,9 +18,9 @@ namespace
 	struct WindowData
 	{
 		double dt = 0;
-		double posz = 0;
+		double posz = -1;
 		double zang = 30 * mth::PI / 180;
-		double camrad = 5;
+		double camrad = 3;
 		Pendulum* pend = nullptr;
 
 		int selected = 0;
@@ -76,27 +79,29 @@ namespace
 	void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) noexcept
 	{
 		auto& data = GetWData(window);
+		if (!data.edit)
+			data.GetEditorPos();
 		// pause
 		if (key == GLFW_KEY_P && action == GLFW_PRESS)
 			data.pend->frozen ^= 1;
 		// editor toggle
 		else if (key == GLFW_KEY_T && action == GLFW_PRESS)
-			data.selected = (data.selected + 1) % 3;
+			data.selected = (data.selected + 1) % (data.pend->ballParams.size() + 1);
 		else if (key == GLFW_KEY_F && action == GLFW_PRESS)
 			data.edit ^= 1;
 		// cam
 		else if (key == GLFW_KEY_A && action != GLFW_RELEASE)
-			data.zang -= data.dt * 4;
+			data.zang -= data.dt * 6;
 		else if (key == GLFW_KEY_D && action != GLFW_RELEASE)
-			data.zang += data.dt * 4;
+			data.zang += data.dt * 6;
 		else if (key == GLFW_KEY_W && action != GLFW_RELEASE)
 			data.posz += 6 * data.dt;
 		else if (key == GLFW_KEY_S && action != GLFW_RELEASE)
 			data.posz -= 6 * data.dt;
 		else if (key == GLFW_KEY_Q && action != GLFW_RELEASE)
-			data.camrad += 6 * data.dt;
+			data.camrad += 10 * data.dt;
 		else if (key == GLFW_KEY_E && action != GLFW_RELEASE && data.camrad > 0.1)
-			data.camrad -= 6 * data.dt;
+			data.camrad -= 10 * data.dt;
 		// editor move
 		else if (key == GLFW_KEY_LEFT && action != GLFW_RELEASE)
 			data.editorPos.X -= 6 * data.dt;
@@ -110,15 +115,34 @@ namespace
 			data.editorPos.Z += 6 * data.dt;
 		else if (key == GLFW_KEY_PAGE_DOWN && action != GLFW_RELEASE)
 			data.editorPos.Z -= 6 * data.dt;
+		else if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS)
+			data.pend->PopBall();
+		else if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS)
+		{
+			data.pend->frozen = true;
+			double r;
+			std::cout << "r : ";
+			std::cin >> r;
+			double k;
+			std::cout << "k : ";
+			std::cin >> k;
+			double m;
+			std::cout << "m : ";
+			std::cin >> m;
+			data.pend->AddBall({r, m, k});
+		}
 	}
 
 	void ShowHelp() noexcept
 	{
 		std::cout
-			<< "WASDQE -- controls"
-			<< "T -- select ball"
-			<< "F -- toggle edit mode"
-			<< "P -- pause"
+			<< "WASDQE -- controls\n"
+			<< "T -- select ball\n"
+			<< "F -- toggle edit mode\n"
+			<< "arrows, page up/down -- move ball in edit mode\n"
+			<< "[ -- pop ball\n"
+			<< "] -- add ball (freezes)\n"
+			<< "P -- pause\n"
 			<< std::endl
 			;
 	}
@@ -126,6 +150,8 @@ namespace
 
 int main()
 {
+	ShowHelp();
+
 	GLFWwindow* window;
 	glfwSetErrorCallback(error_callback);
 	if (!glfwInit())
@@ -139,9 +165,21 @@ int main()
 		glfwTerminate();
 		return 1;
 	}
+	glfwMakeContextCurrent(window);
+	glfwSwapInterval(1);
+
+	if (auto err = glewInit(); err != GLEW_OK)
+	{
+		std::cout << "glew init error " << glewGetErrorString(err) << std::endl;
+		return 1;
+	}
+	auto shd = Shader(vertexShader, pixelShader);
+
 	Pendulum pend;
-	pend.AddBall({5, 3, 30});
-	pend.AddBall({2, 4, 10});
+	pend.AddBall({0.5, 0.3, 50});
+	pend.AddBall({0.2, 0.4, 25});
+	pend.AddBall({0.2, 0.1, 20});
+	pend.AddBall({0.1, 0.2, 30});
 
 	WindowData wnd;
 	wnd.pend = &pend;
@@ -151,9 +189,7 @@ int main()
 	GLUquadricObj* quadObj = gluNewQuadric();
 	std::unique_ptr<GLUquadricObj, void (*)(GLUquadricObj*)> flusher(quadObj, gluDeleteQuadric);
 	gluQuadricDrawStyle(quadObj, GLU_FILL);
-
-	glfwMakeContextCurrent(window);
-	glfwSwapInterval(1);
+	gluQuadricNormals(quadObj, GLU_SMOOTH);
 
 	glClearColor(0.3, 0.5, 0.7, 0);
 	glEnable(GL_DEPTH_TEST);
@@ -167,14 +203,16 @@ int main()
 			prev = std::move(now);
 		}
 
-		vec*posprev = nullptr;
+		vec* posprev = nullptr;
 		vec* savedV = nullptr;
 		vec posprevsaved;
-		if (wnd.edit)
-			if (wnd.selected == 1)
-				posprev = &pend.x1, posprevsaved = pend.x1, savedV = &pend.v1;
-			else if (wnd.selected == 2)
-				posprev = &pend.x2, posprevsaved = pend.x2, savedV = &pend.v2;
+		if (wnd.edit && wnd.selected > 0)
+		{
+			auto m1 = wnd.selected - 1;
+			posprev = &pend.ballCoords[m1 * 2];
+			posprevsaved = *posprev;
+			savedV = &pend.ballCoords[m1 * 2 + 1];
+		}
 		pend.Update();
 		if (posprev != nullptr)
 		{
@@ -195,7 +233,7 @@ int main()
 		glLoadIdentity();
 		glFrustum(-0.1, 0.1, -0.1 * ratio, 0.1 * ratio, 0.1, 1000);
 		gluLookAt(wnd.camrad * sin(wnd.zang), wnd.camrad * cos(wnd.zang), wnd.posz + 1,
-		          0, 0, -pend.r1 + wnd.posz,
+		          0, 0, wnd.posz,
 		          0, 0, 1);
 
 		// draw content
@@ -203,26 +241,25 @@ int main()
 			glLineWidth(5);
 			glColor3f(0, 1, 1);
 			glVertex3f(0, 0, 0);
-			DrawVertAt(pend.x1);
-			DrawVertAt(pend.x2);
+			for (std::size_t i = 0; i < pend.ballParams.size(); i++)
+				DrawVertAt(pend.ballCoords[i * 2]);
 		glEnd();
 
-		glPushMatrix();
-			if (wnd.selected == 1)
-				glColor3f(1, !wnd.edit, 0);
-			else
-				glColor3f(1, 1, 1);
-			glTranslated(pend.x1.X, pend.x1.Y, pend.x1.Z);
-			gluSphere(quadObj, pend.m1 / 10, 10, 10);
-		glPopMatrix();
-		glPushMatrix();
-			if (wnd.selected == 2)
-				glColor3f(1, !wnd.edit, 0);
-			else
-				glColor3f(1, 1, 1);
-			glTranslated(pend.x2.X, pend.x2.Y, pend.x2.Z);
-			gluSphere(quadObj, pend.m2 / 10, 10, 10);
-		glPopMatrix();
+
+		shd.Apply();
+		for (std::size_t i = 0; i < pend.ballParams.size(); i++)
+		{
+			glPushMatrix();
+				if (wnd.selected == i + 1)
+					glColor3f(1, !wnd.edit, 0);
+				else
+					glColor3f(1, 1, 1);
+				auto tr = pend.ballCoords[i * 2];
+				glTranslated(tr.X, tr.Y, tr.Z);
+				gluSphere(quadObj, std::cbrt(pend.ballParams[i].m) / 10, 10, 10);
+			glPopMatrix();
+		}
+		Shader::ApplyDflt();
 
 		DrawCS();
 

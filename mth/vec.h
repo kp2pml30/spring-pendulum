@@ -464,7 +464,7 @@ namespace mth
 		}
 	}
 	template<typename T, typename Y, typename F>
-	inline void Zip(T& v1, T const& v2, F const& f)
+	inline void Zip(T& v1, Y const& v2, F const& f)
 	{
 		auto i1 = v1.begin();
 		auto i2 = v2.begin();
@@ -475,33 +475,4 @@ namespace mth
 			++i2;
 		}
 	}
-
-#if 0
-	template<typename T>
-	class vecn : public std::vector<T>
-	{
-	public:
-		using value_type = T;
-		using reference_type = T;
-	private:
-		using super = std::vector<T>;
-	public:
-		using super::super;
-
-		vecn() = default;
-		vecn(vecn&& v) = default;
-		vecn(vecn const& v) = default;
-		vecn& operator=(vecn&& v) = default;
-		vecn& operator=(vecn const& v) = default;
-	};
-	template<typename T, typename Y>
-	vecn<T> operator*(vecn<T> const& v, Y const& t)
-	{
-		auto r = vecn<T>(v.size());
-		Zip(r, v, [&t](auto& v1, auto const& v2) {
-				v1 = v2 * t;
-			});
-		return r;
-	}
-#endif
 } // namespace mth
