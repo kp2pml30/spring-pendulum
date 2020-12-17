@@ -17,6 +17,9 @@ namespace
 {
 	struct WindowData
 	{
+	private:
+		static void EmpF() noexcept {}
+	public:
 		double dt = 0;
 		double posz = -1;
 		double zang = 30 * mth::PI / 180;
@@ -33,6 +36,8 @@ namespace
 			editorPos = {0, 0, 0};
 			return r;
 		}
+
+		std::function<void()> editedCallback = EmpF;
 	};
 
 	WindowData& GetWData(GLFWwindow* ptr)
@@ -116,7 +121,11 @@ namespace
 		else if (key == GLFW_KEY_PAGE_DOWN && action != GLFW_RELEASE)
 			data.editorPos.Z -= 6 * data.dt;
 		else if (key == GLFW_KEY_LEFT_BRACKET && action == GLFW_PRESS)
+		{
 			data.pend->PopBall();
+			data.selected %= data.pend->ballParams.size() + 1;
+			data.editedCallback();
+		}
 		else if (key == GLFW_KEY_RIGHT_BRACKET && action == GLFW_PRESS)
 		{
 			data.pend->frozen = true;
@@ -130,6 +139,7 @@ namespace
 			std::cout << "m : ";
 			std::cin >> m;
 			data.pend->AddBall({r, m, k});
+			data.editedCallback();
 		}
 	}
 
@@ -143,8 +153,40 @@ namespace
 			<< "[ -- pop ball\n"
 			<< "] -- add ball (freezes)\n"
 			<< "P -- pause\n"
+			<< "\n"
+			<< "Note that any editor operation sets all to RungeKutta current\n"
+			<< R"delim(
++------------+-------+----------+
+|     red    | green |   blue   |
++------------+-------+----------+
+| RungeKutta | Euler | midpoint |
++------------+-------+----------+
+)delim"
 			<< std::endl
 			;
+	}
+
+	void DrawPend(Pendulum const& pend, WindowData const& wnd, GLUquadricObj* quadObj)
+	{
+		glBegin(GL_LINE_STRIP);
+			glLineWidth(5);
+			glColor3f(0, 1, 1);
+			glVertex3f(0, 0, 0);
+			for (std::size_t i = 0; i < pend.ballParams.size(); i++)
+				DrawVertAt(pend.ballCoords[i * 2]);
+		glEnd();
+		for (std::size_t i = 0; i < pend.ballParams.size(); i++)
+		{
+			glPushMatrix();
+				if (wnd.selected == i + 1)
+					glColor3f(1, !wnd.edit, 0);
+				else
+					glColor3f(1, 1, 1);
+				auto tr = pend.ballCoords[i * 2];
+				glTranslated(tr.X, tr.Y, tr.Z);
+				gluSphere(quadObj, std::cbrt(pend.ballParams[i].m) / 10, 10, 10);
+			glPopMatrix();
+		}
 	}
 }
 
@@ -180,9 +222,14 @@ int main()
 	pend.AddBall({0.2, 0.4, 25});
 	pend.AddBall({0.2, 0.1, 20});
 	pend.AddBall({0.1, 0.2, 30});
+	std::array<Pendulum, 2> other_pends;
+	other_pends.fill(pend);
 
 	WindowData wnd;
 	wnd.pend = &pend;
+	wnd.editedCallback = [&]() {
+		other_pends.fill(pend);
+	};
 	glfwSetWindowUserPointer(window, reinterpret_cast<void*>(&wnd));
 	glfwSetKeyCallback(window, key_callback);
 
@@ -197,8 +244,8 @@ int main()
 	auto prev = std::chrono::system_clock::now();
 	while (!glfwWindowShouldClose(window))
 	{
+		auto now = std::chrono::system_clock::now();
 		{
-			auto now = std::chrono::system_clock::now();
 			wnd.dt = std::chrono::duration<double>(now - prev).count();
 			prev = std::move(now);
 		}
@@ -212,8 +259,11 @@ int main()
 			posprev = &pend.ballCoords[m1 * 2];
 			posprevsaved = *posprev;
 			savedV = &pend.ballCoords[m1 * 2 + 1];
+			other_pends.fill(pend);
 		}
-		pend.Update();
+		pend.Update(now);
+		other_pends[0].Update(now, EulerSolver());
+		other_pends[1].Update(now, MidpointSolver());
 		if (posprev != nullptr)
 		{
 			*posprev = posprevsaved + wnd.GetEditorPos();
@@ -237,29 +287,22 @@ int main()
 		          0, 0, 1);
 
 		// draw content
-		glBegin(GL_LINE_STRIP);
-			glLineWidth(5);
-			glColor3f(0, 1, 1);
-			glVertex3f(0, 0, 0);
-			for (std::size_t i = 0; i < pend.ballParams.size(); i++)
-				DrawVertAt(pend.ballCoords[i * 2]);
-		glEnd();
-
-
-		shd.Apply();
-		for (std::size_t i = 0; i < pend.ballParams.size(); i++)
 		{
-			glPushMatrix();
-				if (wnd.selected == i + 1)
-					glColor3f(1, !wnd.edit, 0);
-				else
-					glColor3f(1, 1, 1);
-				auto tr = pend.ballCoords[i * 2];
-				glTranslated(tr.X, tr.Y, tr.Z);
-				gluSphere(quadObj, std::cbrt(pend.ballParams[i].m) / 10, 10, 10);
-			glPopMatrix();
+			shd.Apply();
+			auto ind = shd.GetUniformLocation("idcol");
+
+			glUniform3f(ind, 1, 0.7, 0.7);
+			DrawPend(pend, wnd, quadObj);
+			if (!wnd.edit || wnd.selected == 0)
+			{
+				glUniform3f(ind, 0.7, 1, 0.7);
+				DrawPend(other_pends[0], wnd, quadObj);
+				glUniform3f(ind, 0.7, 0.7, 1);
+				DrawPend(other_pends[1], wnd, quadObj);
+			}
+
+			Shader::ApplyDflt();
 		}
-		Shader::ApplyDflt();
 
 		DrawCS();
 

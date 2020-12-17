@@ -1,57 +1,12 @@
 #pragma once
 
-#include "mth/vec.h"
+#include "Solvers.h"
 
 #include <chrono>
 #include <limits>
 #include <type_traits>
 #include <vector>
 #include <valarray>
-
-template<typename T, typename Y>
-std::valarray<T>& operator*=(std::valarray<T>& l, Y const& r)
-{
-	using namespace mth;
-	for (std::size_t i = 0; i < l.size(); i++)
-		l[i] *= r;
-	return l;
-}
-template<typename T, typename Y>
-std::valarray<T> operator*(std::valarray<T> const& l, Y const& r)
-{
-	auto copy = l;
-	copy *= r;
-	return copy;
-}
-template<typename T, typename Y>
-std::valarray<T>& operator/=(std::valarray<T>& l, Y const& r)
-{
-	using namespace mth;
-	for (std::size_t i = 0; i < l.size(); i++)
-		l[i] /= r;
-	return l;
-}
-
-/*
- * Returns delta
- */
-template<typename F, typename V, typename T>
-V RungeKutta(F const& f, V const& x0, T h)
-{
-	using namespace mth;
-	auto k1 = f(x0, 0);
-	auto hd2 = h / 2;
-	auto k2 = f(x0 + k1 * hd2, hd2);
-	auto k3 = f(x0 + k2 * hd2, hd2);
-	auto k4 = f(x0 + k3 * h  , h);
-	k2 *= 2;
-	k3 *= 2;
-	k1 += k2;
-	k1 += k3;
-	k1 += k4;
-	k1 *= h / 6;
-	return k1;
-}
 
 using vec = mth::vec<double>;
 
@@ -102,11 +57,12 @@ public:
 
 	bool frozen = false;
 
-	void Update()
+	template<typename S = RungeKuttaSolver>
+	void Update(std::chrono::time_point<std::chrono::system_clock> const& now, S const& solver = S())
 	{
 		using namespace mth;
 		using vec = ::vec;
-		auto now = std::chrono::system_clock::now();
+		// auto now = std::chrono::system_clock::now();
 		if (frozen)
 		{
 			prev = std::move(now);
@@ -137,17 +93,21 @@ public:
 						auto const& xm = p[i * 2];
 						auto const& vm = p[i * 2 + 1];
 						auto const& xn = p[i * 2 + 2];
+						// x' = v
 						ret[i * 2] = vm * delta;
 						auto fn = (1 - parn.r / (xn - xm).Len()) * par.k;
+						// v' = a
 						ret[i * 2 + 1] = fp / par.m * (xp - xm) + (xn - xm) * fn / par.m + g;
 						fp = fn;
 						xp = xm;
 					}
+					// x'
 					ret[ret.size() - 2] = p[p.size() - 1] * delta;
+					// v'
 					ret[ret.size() - 1] = fp * (xp - p[p.size() - 2]) / ballParams.back().m + g;
 					return ret;
 				};
-		auto res = RungeKutta(
+		auto res = solver(
 				deltacalc,
 				ballCoords,
 				delta

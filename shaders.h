@@ -15,10 +15,12 @@ void main(void)
 )delim";
 
 inline char pixelShader[] = R"delim(
+uniform vec3 idcol;
+
 void main(void)
 {
 	// gl_FragColor = vec4(color, 1);
 	// gl_FragColor = vec4(norm, 1);
-	gl_FragColor = vec4(gl_Color.xyz, 1);
+	gl_FragColor = vec4(gl_Color.xyz * idcol, 1);
 }
 )delim";

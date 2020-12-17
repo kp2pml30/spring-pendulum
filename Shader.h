@@ -72,4 +72,8 @@ public:
 	{
 		glUseProgram(0);
 	}
+	auto GetUniformLocation(std::string const& v)
+	{
+		return glGetUniformLocation(program, v.c_str());
+	}
 };
