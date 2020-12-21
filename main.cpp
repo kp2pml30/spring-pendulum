@@ -9,10 +9,6 @@
 #include "shaders.h"
 #include "Shader.h"
 
-#ifndef __FAST_MATH__
-# warning fast math is not enabled
-#endif
-
 namespace
 {
 	struct WindowData
@@ -47,7 +43,7 @@ namespace
 
 	void error_callback(int error, char const* description)
 	{
-		fprintf(stderr, "Error: %s\n", description);
+		std::cerr << "Error : " << description << std::endl;
 	}
 
 	void DrawVertAt(vec const& v) noexcept
@@ -194,14 +190,13 @@ int main()
 {
 	ShowHelp();
 
-	GLFWwindow* window;
 	glfwSetErrorCallback(error_callback);
 	if (!glfwInit())
 		return 1;
 
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
-	window = glfwCreateWindow(640, 480, "Simple example", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(640, 480, "spring pendulum", NULL, NULL);
 	if (!window)
 	{
 		glfwTerminate();
@@ -212,7 +207,7 @@ int main()
 
 	if (auto err = glewInit(); err != GLEW_OK)
 	{
-		std::cout << "glew init error " << glewGetErrorString(err) << std::endl;
+		std::cerr << "glew init error " << glewGetErrorString(err) << std::endl;
 		return 1;
 	}
 	auto shd = Shader(vertexShader, pixelShader);
@@ -270,11 +265,10 @@ int main()
 			*savedV = vec(0);
 		}
 
-		double ratio;
 		int width, height;
 
 		glfwGetFramebufferSize(window, &width, &height);
-		ratio = height / (float)width;
+		float ratio = height / (float)width;
 
 		// glFrustum(float left, float right, float bottom, float top, float near, float far);
 		glViewport(0, 0, width, height);

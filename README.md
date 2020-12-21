@@ -24,3 +24,6 @@ Pendulum is dependency-free
 ## Conclusion
 Runge kutta is close to midpoint in the start. Euler has big error.
 
+## Is euler a bug?
+No it is not. I tested exponent (`plot-test.cpp`) with all methods and it is same with wikipedia plots.
+

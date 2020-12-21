@@ -53,6 +53,7 @@ V Euler(F const& f, V const& x0, T h)
 	using namespace mth;
 	auto res = f(x0, h);
 	res *= h;
+	// res /= 1.4405;
 	return res;
 }
 

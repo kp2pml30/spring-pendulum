@@ -18,7 +18,7 @@ namespace mth
 		: X(A)
 		, Y(A)
 		{}
-		operator typename std::conditional_t<std::is_reference_v<type>, void, type>::type *() const noexcept
+		operator std::conditional_t<std::is_reference_v<type>, void, type> *() const noexcept
 		{
 			static_assert(!std::is_reference<type>::value, "Can not convert reference");
 			return &((vec2*)this)->X;
@@ -152,7 +152,7 @@ namespace mth
 			Z -= V.Z;
 			return *this;
 		}
-		operator typename std::conditional_t<std::is_reference<type>::value, void, type> *() const noexcept
+		operator std::conditional_t<std::is_reference<type>::value, void, type> *() const noexcept
 		{
 			static_assert(!std::is_reference<type>::value, "Can not convert reference");
 			return &((vec*)this)->X;
@@ -464,7 +464,7 @@ namespace mth
 		}
 	}
 	template<typename T, typename Y, typename F>
-	inline void Zip(T& v1, Y const& v2, F const& f)
+	inline void Zip(T& v1, T const& v2, F const& f)
 	{
 		auto i1 = v1.begin();
 		auto i2 = v2.begin();
